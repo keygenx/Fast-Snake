@@ -1,5 +1,5 @@
 # Fast-Snake
-intall pytorch
+install pytorch
 <br/>
 Open Notebook.ipynb
 <br/>
