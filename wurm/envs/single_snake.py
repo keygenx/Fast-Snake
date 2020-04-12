@@ -100,6 +100,12 @@ class SingleSnake(object):
         self.food_colour = torch.Tensor((255, 0, 0)).short().to(self.device)
         self.edge_colour = torch.Tensor((0, 0, 0)).short().to(self.device)
 
+        self.move_left = torch.Tensor([1]).long().to(self.device)
+        self.move_up = torch.Tensor([2]).long().to(self.device)
+        self.move_right = torch.Tensor([3]).long().to(self.device)
+        self.move_down = torch.Tensor([0]).long().to(self.device)
+        self.action_space = torch.Tensor([self.move_left, self.move_up, self.move_right, self.move_down]).long().to(self.device)
+
     def _get_rgb(self):
         # RGB image same as is displayed in .render()
         img = torch.ones_like(self.envs).short() * 255
@@ -139,15 +145,15 @@ class SingleSnake(object):
             observation = self.envs.clone()
             return observation
         elif observation_mode == 'one_channel':
-            observation = (self.envs[:, BODY_CHANNEL, :, :] > EPS).float() * 0.5
-            observation += self.envs[:, HEAD_CHANNEL, :, :] * 0.5
-            observation += self.envs[:, FOOD_CHANNEL, :, :] * 1.5
+            observation = (self.envs[:, BODY_CHANNEL, :, :] > EPS).float() * 1.0
+            observation += self.envs[:, HEAD_CHANNEL, :, :] * 1.0
+            observation += self.envs[:, FOOD_CHANNEL, :, :] * 3.0
             # Add in -1 values to indicate edge of map
             observation[:, :1, :] = -1
             observation[:, :, :1] = -1
             observation[:, -1:, :] = -1
             observation[:, :, -1:] = -1
-            return observation.unsqueeze(1)
+            return observation #watch: removed unsqueeze(1)
         elif observation_mode == 'positions':
             observation = (self.envs[:, BODY_CHANNEL, :, :] > EPS).float() * 0.5
             observation += self.envs[:, HEAD_CHANNEL, :, :] * 0.5
@@ -300,7 +306,7 @@ class SingleSnake(object):
         self.envs.round_()
 
         self.done = done
-        return self._observe(self.observation_mode), reward.unsqueeze(-1), done.unsqueeze(-1), info
+        return self._observe(self.observation_mode), reward, done, info #watch: removed unsqueeze from reward and done
 
     def _get_food_addition(self, envs: torch.Tensor):
         # Get empty locations
@@ -429,3 +435,6 @@ class SingleSnake(object):
     def close(self):
         self.viewer.window.close()
         self.viewer= None
+
+    def random_action(self):
+        return self.action_space[torch.randint(0,4,(self.num_envs,))]
