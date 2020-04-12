@@ -5,11 +5,27 @@ from torch.nn import functional as F
 from gym.envs.classic_control import rendering
 import numpy as np
 from PIL import Image
+import os
 
-from config import DEFAULT_DEVICE, BODY_CHANNEL, EPS, HEAD_CHANNEL, FOOD_CHANNEL
 from wurm._filters import ORIENTATION_FILTERS, NO_CHANGE_FILTER, LENGTH_3_SNAKES
 from wurm.utils import determine_orientations, head, food, body, drop_duplicates
 
+################################CONSTANT#########################################
+PATH = os.path.dirname(os.path.realpath(__file__))
+
+DEFAULT_DEVICE = 'cuda'
+
+FOOD_CHANNEL = 0
+HEAD_CHANNEL = 1
+BODY_CHANNEL = 2
+
+SELF_COLLISION_REWARD = -1
+EDGE_COLLISION_REWARD = -2
+STEP_REWARD = -1
+FOOD_REWARD = +4
+
+EPS = 1e-6
+################################CONSTANT#########################################
 
 Spec = namedtuple('Spec', ['reward_threshold'])
 
@@ -258,7 +274,7 @@ class SingleSnake(object):
         self_collision = ((head(self.envs) * body(self.envs)).view(self.num_envs, -1).sum(dim=-1) > EPS)
         info.update({'self_collision': self_collision})
         done = done | self_collision
-        
+        reward.add_(SELF_COLLISION_REWARD, self_collision)
         # Create a new head position in the body channel
         # Make this head +1 greater if the snake has just eaten food
         self.envs[:, BODY_CHANNEL:BODY_CHANNEL + 1, :, :] += \
@@ -274,7 +290,8 @@ class SingleSnake(object):
         # Remove food and give reward
         # `food_removal` is 0 except where a snake head is at the same location as food where it is -1
         food_removal = head(self.envs) * food(self.envs) * -1
-        reward.sub_(food_removal.view(self.num_envs, -1).sum(dim=-1).float())
+        print(food_removal)
+        reward.sub_(FOOD_REWARD, food_removal.view(self.num_envs, -1).sum(dim=-1).float())
         self.envs[:, FOOD_CHANNEL:FOOD_CHANNEL + 1, :, :] += food_removal
         if self.verbose:
             print(f'Food removal: {time() - t0}s')
@@ -282,7 +299,7 @@ class SingleSnake(object):
         # Add new food if necessary.
         if food_removal.sum() < 0:
             t0 = time()
-            food_addition_env_indices = (food_removal * -1).view(self.num_envs, -1).sum(dim=-1).bool() #watch
+            food_addition_env_indices = (food_removal * -1).view(self.num_envs, -1).sum(dim=-1).bool() 
             add_food_envs = self.envs[food_addition_env_indices, :, :, :]
             food_addition = self._get_food_addition(add_food_envs)
             self.envs[food_addition_env_indices, FOOD_CHANNEL:FOOD_CHANNEL+1, :, :] += food_addition
@@ -298,6 +315,7 @@ class SingleSnake(object):
             NO_CHANGE_FILTER.to(self.device),
         ).view(self.num_envs, -1).sum(dim=-1) < EPS
         done = done | edge_collision
+        reward.add_(EDGE_COLLISION_REWARD, edge_collision) #
         info.update({'edge_collision': edge_collision})
         if self.verbose:
             print(f'Edge collision ({edge_collision.sum().item()} envs): {time() - t0}s')
@@ -306,6 +324,9 @@ class SingleSnake(object):
         self.envs.round_()
 
         self.done = done
+
+        #Applying step reward
+        reward.add_(STEP_REWARD)
         return self._observe(self.observation_mode), reward, done, info #watch: removed unsqueeze from reward and done
 
     def _get_food_addition(self, envs: torch.Tensor):
