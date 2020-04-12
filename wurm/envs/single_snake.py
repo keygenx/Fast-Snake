@@ -19,10 +19,10 @@ FOOD_CHANNEL = 0
 HEAD_CHANNEL = 1
 BODY_CHANNEL = 2
 
-SELF_COLLISION_REWARD = -1
-EDGE_COLLISION_REWARD = -2
+SELF_COLLISION_REWARD = -10
+EDGE_COLLISION_REWARD = -10
 STEP_REWARD = -1
-FOOD_REWARD = +4
+FOOD_REWARD = +5
 
 EPS = 1e-6
 ################################CONSTANT#########################################
@@ -290,7 +290,6 @@ class SingleSnake(object):
         # Remove food and give reward
         # `food_removal` is 0 except where a snake head is at the same location as food where it is -1
         food_removal = head(self.envs) * food(self.envs) * -1
-        print(food_removal)
         reward.sub_(FOOD_REWARD, food_removal.view(self.num_envs, -1).sum(dim=-1).float())
         self.envs[:, FOOD_CHANNEL:FOOD_CHANNEL + 1, :, :] += food_removal
         if self.verbose:
@@ -327,6 +326,11 @@ class SingleSnake(object):
 
         #Applying step reward
         reward.add_(STEP_REWARD)
+        
+        #Resetting Environment if terminal state is reached
+        if done.any():
+            self.reset()
+
         return self._observe(self.observation_mode), reward, done, info #watch: removed unsqueeze from reward and done
 
     def _get_food_addition(self, envs: torch.Tensor):
