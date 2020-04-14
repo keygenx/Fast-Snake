@@ -21,7 +21,7 @@ BODY_CHANNEL = 2
 
 SELF_COLLISION_REWARD = -10
 EDGE_COLLISION_REWARD = -10
-STEP_REWARD = -1
+STEP_REWARD = 0
 FOOD_REWARD = +5
 
 EPS = 1e-6
@@ -169,7 +169,7 @@ class SingleSnake(object):
             observation[:, :, :1] = -1
             observation[:, -1:, :] = -1
             observation[:, :, -1:] = -1
-            return observation #watch: removed unsqueeze(1)
+            return observation.unsqueeze(1)
         elif observation_mode == 'positions':
             observation = (self.envs[:, BODY_CHANNEL, :, :] > EPS).float() * 0.5
             observation += self.envs[:, HEAD_CHANNEL, :, :] * 0.5
