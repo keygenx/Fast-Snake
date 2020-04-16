@@ -19,10 +19,10 @@ FOOD_CHANNEL = 0
 HEAD_CHANNEL = 1
 BODY_CHANNEL = 2
 
-SELF_COLLISION_REWARD = -10
-EDGE_COLLISION_REWARD = -10
-STEP_REWARD = 0
-FOOD_REWARD = +5
+SELF_COLLISION_REWARD = -1
+EDGE_COLLISION_REWARD = -1
+STEP_REWARD = 0.0
+FOOD_REWARD = +0.5
 
 EPS = 1e-6
 ################################CONSTANT#########################################
@@ -78,7 +78,8 @@ class SingleSnake(object):
                  device: str = DEFAULT_DEVICE,
                  manual_setup: bool = False,
                  verbose: int = 0,
-                 render_args: dict = None):
+                 render_args: dict = None,
+                 auto_reset: bool = True):
         """Initialise the environments
 
         Args:
@@ -94,6 +95,7 @@ class SingleSnake(object):
         self.observation_mode = observation_mode
         self.device = device
         self.verbose = verbose
+        self.auto_reset = auto_reset
         if render_args is None:
             self.render_args = {'num_rows': 1, 'num_cols': 1, 'size': 256}
         else:
@@ -328,7 +330,7 @@ class SingleSnake(object):
         reward.add_(STEP_REWARD)
         
         #Resetting Environment if terminal state is reached
-        if done.any():
+        if done.any() and self.auto_reset:
             self.reset()
 
         return self._observe(self.observation_mode), reward, done, info #watch: removed unsqueeze from reward and done
