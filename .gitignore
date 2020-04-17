@@ -10,7 +10,6 @@ runs/
 *.so
 
 #saved models and videos
-model/
 videos/
 
 # Distribution / packaging
