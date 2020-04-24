@@ -11,7 +11,7 @@ from wurm._filters import ORIENTATION_FILTERS, NO_CHANGE_FILTER, LENGTH_3_SNAKES
 from wurm.utils import determine_orientations, head, food, body, drop_duplicates
 
 ################################CONSTANT#########################################
-PATH = os.path.dirname(os.path.realpath(__file__))
+#PATH = os.path.dirname(os.path.realpath(__file__))
 
 DEFAULT_DEVICE = 'cuda'
 
@@ -97,7 +97,7 @@ class SingleSnake(object):
         self.verbose = verbose
         self.auto_reset = auto_reset
         if render_args is None:
-            self.render_args = {'num_rows': 1, 'num_cols': 1, 'size': 256}
+            self.render_args = {'num_rows': 1, 'num_cols': 1, 'size': 512}
         else:
             self.render_args = render_args
 
@@ -448,7 +448,7 @@ class SingleSnake(object):
 
         img = np.array(Image.fromarray(img.astype(np.uint8)).resize(
             (self.render_args['size'] * num_cols,
-             self.render_args['size'] * num_rows)
+             self.render_args['size'] * num_rows), Image.NEAREST
         ))
 
         if mode == 'human':
