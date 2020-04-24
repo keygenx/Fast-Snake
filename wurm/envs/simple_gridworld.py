@@ -3,14 +3,32 @@ from collections import namedtuple
 import torch
 from torch.nn import functional as F
 from typing import Tuple
+from gym.envs.classic_control import rendering
+from PIL import Image
+import os
 
-from config import DEFAULT_DEVICE, BODY_CHANNEL, EPS, HEAD_CHANNEL, FOOD_CHANNEL
+
 from wurm._filters import ORIENTATION_FILTERS, NO_CHANGE_FILTER
 from wurm.utils import head, food, body, drop_duplicates
 
+################################CONSTANT#########################################
+#PATH = os.path.dirname(os.path.realpath(__file__))
+
+DEFAULT_DEVICE = 'cuda'
+
+FOOD_CHANNEL = 0
+HEAD_CHANNEL = 1
+
+EDGE_COLLISION_REWARD = -1
+
+STEP_REWARD = 0.0
+FOOD_REWARD = +0.5
+
+EPS = 1e-6
+################################CONSTANT#########################################
+
 
 Spec = namedtuple('Spec', ['reward_threshold'])
-
 
 class SimpleGridworld(object):
     """Batched gridworld environment.
@@ -46,11 +64,12 @@ class SimpleGridworld(object):
     def __init__(self,
                  num_envs: int,
                  size: int,
-                 on_death: str = 'restart',
+                 auto_reset: bool = True ,
                  observation_mode: str = 'default',
                  device: str = DEFAULT_DEVICE,
                  start_location: Tuple[int, int] = None,
                  manual_setup: bool = False,
+                 render_args = None,
                  verbose: int = 0):
         """Initialise the environments
 
@@ -61,12 +80,16 @@ class SimpleGridworld(object):
         """
         self.num_envs = num_envs
         self.size = size
-        self.on_death = on_death
         self.observation_mode = observation_mode
         self.start_location = start_location
         self.device = device
+        self.auto_reset = auto_reset
         self.verbose = verbose
-
+        if render_args is None:
+            self.render_args = {'num_rows': 1, 'num_cols': 1, 'size': 512}
+        else:
+            self.render_args = render_args
+            
         self.t = 0
 
         if manual_setup:
@@ -77,18 +100,24 @@ class SimpleGridworld(object):
             self.envs = self._create_envs(self.num_envs)
             self.envs.requires_grad_(False)
 
-        self.done = torch.zeros(num_envs).to(self.device).byte()
+        self.done = torch.zeros(num_envs).to(self.device).bool()
 
         self.viewer = None
 
         self.head_colour = torch.Tensor((0, 255, 0)).short().to(self.device)
         self.food_colour = torch.Tensor((255, 0, 0)).short().to(self.device)
         self.edge_colour = torch.Tensor((0, 0, 0)).short().to(self.device)
-
+        
+        self.move_left = torch.Tensor([1]).long().to(self.device)
+        self.move_up = torch.Tensor([2]).long().to(self.device)
+        self.move_right = torch.Tensor([3]).long().to(self.device)
+        self.move_down = torch.Tensor([0]).long().to(self.device)
+        self.action_space = torch.Tensor([self.move_left, self.move_up, self.move_right, self.move_down]).long().to(self.device)
+    
+    
     def _get_rgb(self):
         # RGB image same as is displayed in .render()
-        img = torch.zeros((self.num_envs, 3, self.size, self.size)).short().to(self.device).requires_grad_(False) * 255
-
+        img = torch.ones((self.num_envs, 3, self.size, self.size)).short().to(self.device) * 255
         # Convert to BHWC axes for easier indexing here
         img = img.permute((0, 2, 3, 1))
 
@@ -119,6 +148,17 @@ class SimpleGridworld(object):
             return observation
         elif observation_mode == 'raw':
             return self.envs.clone()
+        
+        elif observation_mode == 'one_channel':
+            observation = (self.envs[:, HEAD_CHANNEL, :, :] == 1) * 1.0
+            observation += self.envs[:, FOOD_CHANNEL, :, :] * 3.0
+            # Add in -1 values to indicate edge of map
+            observation[:, :1, :] = -1
+            observation[:, :, :1] = -1
+            observation[:, -1:, :] = -1
+            observation[:, :, -1:] = -1
+            return observation.unsqueeze(1)
+        
         elif observation_mode == 'positions':
             head_idx = self.envs[:, HEAD_CHANNEL, :, :].view(self.num_envs, self.size ** 2).argmax(dim=-1)
             food_idx = self.envs[:, FOOD_CHANNEL, :, :].view(self.num_envs, self.size ** 2).argmax(dim=-1)
@@ -141,7 +181,7 @@ class SimpleGridworld(object):
             raise RuntimeError('Must have the same number of actions as environments.')
 
         reward = torch.zeros((self.num_envs,)).float().to(self.device).requires_grad_(False)
-        done = torch.zeros((self.num_envs,)).byte().to(self.device).requires_grad_(False)
+        done = torch.zeros((self.num_envs,)).bool().to(self.device).requires_grad_(False)
         info = dict()
 
         t0 = time()
@@ -166,7 +206,7 @@ class SimpleGridworld(object):
         # Remove food and give reward
         # `food_removal` is 0 except where a snake head is at the same location as food where it is -1
         food_removal = head(self.envs) * food(self.envs) * -1
-        reward.sub_(food_removal.view(self.num_envs, -1).sum(dim=-1).float())
+        reward.sub_(FOOD_REWARD, food_removal.view(self.num_envs, -1).sum(dim=-1).float())
         self.envs[:, FOOD_CHANNEL:FOOD_CHANNEL + 1, :, :] += food_removal
         if self.verbose:
             print(f'Food removal: {time() - t0}s')
@@ -174,7 +214,7 @@ class SimpleGridworld(object):
         # Add new food if necessary.
         if food_removal.sum() < 0:
             t0 = time()
-            food_addition_env_indices = (food_removal * -1).view(self.num_envs, -1).sum(dim=-1).byte()
+            food_addition_env_indices = (food_removal * -1).view(self.num_envs, -1).sum(dim=-1).bool()
             add_food_envs = self.envs[food_addition_env_indices, :, :, :]
             food_addition = self._get_food_addition(add_food_envs)
             self.envs[food_addition_env_indices, FOOD_CHANNEL:FOOD_CHANNEL+1, :, :] += food_addition
@@ -190,6 +230,7 @@ class SimpleGridworld(object):
             NO_CHANGE_FILTER.to(self.device),
         ).view(self.num_envs, -1).sum(dim=-1) < EPS
         done = done | edge_collision
+        reward.add_(EDGE_COLLISION_REWARD, edge_collision)
         info.update({'edge_collision': edge_collision})
         if self.verbose:
             print(f'Edge collision ({edge_collision.sum().item()} envs): {time() - t0}s')
@@ -198,8 +239,13 @@ class SimpleGridworld(object):
         self.envs.round_()
 
         self.done = done
-
-        return self._observe(self.observation_mode), reward.unsqueeze(-1), done.unsqueeze(-1), info
+        
+        #Applying step reward
+        reward.add_(STEP_REWARD)
+        
+        if done.any() and self.auto_reset:
+            self.reset()
+        return self._observe(self.observation_mode), reward, done, info
 
     def _select_from_available_locations(self, locs: torch.Tensor) -> torch.Tensor:
         locations = torch.nonzero(locs)
@@ -237,7 +283,7 @@ class SimpleGridworld(object):
         t0 = time()
         if done.sum() > 0:
             new_envs = self._create_envs(int(done.sum().item()))
-            self.envs[done.byte(), :, :, :] = new_envs
+            self.envs[done, :, :, :] = new_envs
 
         if self.verbose:
             print(f'Resetting {done.sum().item()} envs: {time() - t0}s')
@@ -250,14 +296,20 @@ class SimpleGridworld(object):
             raise NotImplementedError('Environemnts smaller than this don\'t make sense.')
 
         envs = torch.zeros((num_envs, 2, self.size, self.size)).to(self.device)
-
+        
         if self.start_location is None:
-            available_locations = torch.zeros_like(envs)
+            available_locations = envs.sum(dim=1, keepdim=True) < EPS
+            # Remove boundaries
             available_locations[:, :, :1, :] = 0
             available_locations[:, :, :, :1] = 0
             available_locations[:, :, -1:, :] = 0
             available_locations[:, :, :, -1:] = 0
-            raise NotImplementedError("Haven't implemented random starting locations")
+
+            head_indices = drop_duplicates(torch.nonzero(available_locations), 0)
+            head_addition = torch.sparse_coo_tensor(
+                head_indices.t(),  torch.ones(len(head_indices)), available_locations.shape, device=self.device)
+            envs[:, HEAD_CHANNEL:HEAD_CHANNEL + 1, :, :] = head_addition.to_dense()
+        
         else:
             envs[:, HEAD_CHANNEL:HEAD_CHANNEL + 1, self.start_location[0], self.start_location[1]] = 1
 
@@ -267,5 +319,51 @@ class SimpleGridworld(object):
 
         return envs.round()
 
+    def render(self, mode: str = 'human'):
+        if self.viewer is None:
+            self.viewer = rendering.SimpleImageViewer()
+
+        # Get RBG Tensor BCHW
+        img = self._get_rgb()
+
+        # Convert to numpy
+        img = img.cpu().numpy()
+        # Rearrange images depending on number of envs
+        if self.num_envs == 1:
+            num_cols = num_rows = 1
+            img = img[0]
+            img = np.transpose(img, (1, 2, 0))
+        else:
+            num_rows = self.render_args['num_rows']
+            num_cols = self.render_args['num_cols']
+            # Make a 2x2 grid of images
+            output = np.zeros((self.size*num_rows, self.size*num_cols, 3))
+            for i in range(num_rows):
+                for j in range(num_cols):
+                    output[
+                        i*self.size:(i+1)*self.size, j*self.size:(j+1)*self.size, :
+                    ] = np.transpose(img[i*num_cols + j], (1, 2, 0))
+
+            img = output
+        img = np.array(Image.fromarray(img.astype(np.uint8)).resize(
+            (self.render_args['size'] * num_cols,
+             self.render_args['size'] * num_rows), Image.NEAREST
+        ))
+
+        if mode == 'human':
+            self.viewer.imshow(img)
+            return self.viewer.isopen
+        elif mode == 'rgb_array':
+            return img
+        else:
+            raise ValueError('Render mode not recognised.')
+
+    def close(self):
+        self.viewer.window.close()
+        self.viewer= None
+        
+    def random_action(self):
+        return self.action_space[torch.randint(0,4,(self.num_envs,))]
+    
     def _consistent(self):
         pass
