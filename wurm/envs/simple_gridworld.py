@@ -6,7 +6,7 @@ from typing import Tuple
 from gym.envs.classic_control import rendering
 from PIL import Image
 import os
-
+import numpy as np
 
 from wurm._filters import ORIENTATION_FILTERS, NO_CHANGE_FILTER
 from wurm.utils import head, food, body, drop_duplicates
@@ -60,6 +60,10 @@ class SimpleGridworld(object):
     """
 
     spec = Spec(float('inf'))
+    metadata = {
+    'render.modes': ['rgb_array'],
+    'video.frames_per_second': 12
+    }
 
     def __init__(self,
                  num_envs: int,
