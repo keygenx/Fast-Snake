@@ -248,7 +248,7 @@ class SimpleGridworld(object):
         reward.add_(STEP_REWARD)
         
         if done.any() and self.auto_reset:
-            self.reset()
+            self.reset(done)
         return self._observe(self.observation_mode), reward, done, info
 
     def _select_from_available_locations(self, locs: torch.Tensor) -> torch.Tensor:
@@ -280,7 +280,7 @@ class SimpleGridworld(object):
                 reset
         """
         if done is None:
-            done = self.done
+            done = torch.ones(self.num_envs, dtype=bool).to(DEFAULT_DEVICE)
 
         done = done.view((done.shape[0]))
 

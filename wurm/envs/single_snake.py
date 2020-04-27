@@ -331,7 +331,7 @@ class SingleSnake(object):
         
         #Resetting Environment if terminal state is reached
         if done.any() and self.auto_reset:
-            self.reset()
+            self.reset(done)
 
         return self._observe(self.observation_mode), reward, done, info #watch: removed unsqueeze from reward and done
 
@@ -359,7 +359,7 @@ class SingleSnake(object):
                 reset
         """
         if done is None:
-            done = self.done
+            done = torch.ones(self.num_envs, dtype=bool).to(DEFAULT_DEVICE)
 
         done = done.view((done.shape[0]))
 
