@@ -109,7 +109,7 @@ class SingleSnake(object):
             self.envs = self._create_envs(self.num_envs)
             self.envs.requires_grad_(False)
 
-        self.done = torch.zeros((num_envs)).to(self.device).bool()
+        self.done = torch.zeros((num_envs)).to(self.device).bool().requires_grad_(False)
         
         self.viewer = None
 
@@ -226,7 +226,7 @@ class SingleSnake(object):
             raise RuntimeError('Must have the same number of actions as environments.')
         
         reward = torch.zeros((self.num_envs,)).float().to(self.device).requires_grad_(False)
-        #done = torch.zeros((self.num_envs,)).bool().to(self.device).requires_grad_(False)
+        previous_done = self.done.clone() #to set all rewards to zero if state is already terminal
         
         info = dict()
         
@@ -327,12 +327,16 @@ class SingleSnake(object):
 
         #Applying step reward
         reward.add_(STEP_REWARD)
-        
+        if ~self.auto_reset:
+            reward.mul_(~previous_done)
+
+
+        done = self.done.clone()
         #Resetting Environment if terminal state is reached
         if self.done.any() and self.auto_reset:
             self.reset(self.done)
 
-        return self._observe(self.observation_mode), reward, self.done.clone(), info #watch: removed unsqueeze from reward and done
+        return self._observe(self.observation_mode), reward, done, info #watch: removed unsqueeze from reward and done
 
     def _get_food_addition(self, envs: torch.Tensor):
         # Get empty locations
