@@ -226,7 +226,7 @@ class SingleSnake(object):
             raise RuntimeError('Must have the same number of actions as environments.')
         
         reward = torch.zeros((self.num_envs,)).float().to(self.device).requires_grad_(False)
-        done = torch.zeros((self.num_envs,)).bool().to(self.device).requires_grad_(False)
+        #done = torch.zeros((self.num_envs,)).bool().to(self.device).requires_grad_(False)
         
         info = dict()
         
@@ -275,7 +275,7 @@ class SingleSnake(object):
         # Check for hitting self
         self_collision = ((head(self.envs) * body(self.envs)).view(self.num_envs, -1).sum(dim=-1) > EPS)
         info.update({'self_collision': self_collision})
-        done = done | self_collision
+        self.done = self.done | self_collision
         reward.add_(SELF_COLLISION_REWARD, self_collision)
         # Create a new head position in the body channel
         # Make this head +1 greater if the snake has just eaten food
@@ -315,7 +315,7 @@ class SingleSnake(object):
             head(self.envs),
             NO_CHANGE_FILTER.to(self.device),
         ).view(self.num_envs, -1).sum(dim=-1) < EPS
-        done = done | edge_collision
+        self.done = self.done | edge_collision
         reward.add_(EDGE_COLLISION_REWARD, edge_collision) #
         info.update({'edge_collision': edge_collision})
         if self.verbose:
@@ -324,16 +324,15 @@ class SingleSnake(object):
         # Apply rounding to stop numerical errors accumulating
         self.envs.round_()
 
-        self.done = done
 
         #Applying step reward
         reward.add_(STEP_REWARD)
         
         #Resetting Environment if terminal state is reached
-        if done.any() and self.auto_reset:
-            self.reset(done)
+        if self.done.any() and self.auto_reset:
+            self.reset(self.done)
 
-        return self._observe(self.observation_mode), reward, done, info #watch: removed unsqueeze from reward and done
+        return self._observe(self.observation_mode), reward, self.done.clone(), info #watch: removed unsqueeze from reward and done
 
     def _get_food_addition(self, envs: torch.Tensor):
         # Get empty locations
@@ -359,9 +358,9 @@ class SingleSnake(object):
                 reset
         """
         if done is None:
-            done = torch.ones(self.num_envs, dtype=bool).to(DEFAULT_DEVICE)
+            done = torch.ones(self.num_envs, dtype=bool).to(self.device)
 
-        done = done.view((done.shape[0]))
+        #done = done.view((done.shape[0]))
 
         t0 = time()
         if done.sum() > 0:
@@ -371,6 +370,7 @@ class SingleSnake(object):
         if self.verbose:
             print(f'Resetting {done.sum().item()} envs: {time() - t0}s')
 
+        self.done = self.done & (~done)
         return self._observe(self.observation_mode)
 
     def _create_envs(self, num_envs: int):

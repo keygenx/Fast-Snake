@@ -185,7 +185,7 @@ class SimpleGridworld(object):
             raise RuntimeError('Must have the same number of actions as environments.')
 
         reward = torch.zeros((self.num_envs,)).float().to(self.device).requires_grad_(False)
-        done = torch.zeros((self.num_envs,)).bool().to(self.device).requires_grad_(False)
+        #done = torch.zeros((self.num_envs,)).bool().to(self.device).requires_grad_(False)
         info = dict()
 
         t0 = time()
@@ -233,7 +233,7 @@ class SimpleGridworld(object):
             head(self.envs),
             NO_CHANGE_FILTER.to(self.device),
         ).view(self.num_envs, -1).sum(dim=-1) < EPS
-        done = done | edge_collision
+        self.done = self.done | edge_collision
         reward.add_(EDGE_COLLISION_REWARD, edge_collision)
         info.update({'edge_collision': edge_collision})
         if self.verbose:
@@ -242,14 +242,13 @@ class SimpleGridworld(object):
         # Apply rounding to stop numerical errors accumulating
         self.envs.round_()
 
-        self.done = done
         
         #Applying step reward
         reward.add_(STEP_REWARD)
         
-        if done.any() and self.auto_reset:
-            self.reset(done)
-        return self._observe(self.observation_mode), reward, done, info
+        if self.done.any() and self.auto_reset:
+            self.reset(self.done)
+        return self._observe(self.observation_mode), reward, self.done.clone(), info
 
     def _select_from_available_locations(self, locs: torch.Tensor) -> torch.Tensor:
         locations = torch.nonzero(locs)
@@ -280,9 +279,8 @@ class SimpleGridworld(object):
                 reset
         """
         if done is None:
-            done = torch.ones(self.num_envs, dtype=bool).to(DEFAULT_DEVICE)
+            done = torch.ones(self.num_envs, dtype=bool).to(self.device)
 
-        done = done.view((done.shape[0]))
 
         t0 = time()
         if done.sum() > 0:
@@ -291,7 +289,7 @@ class SimpleGridworld(object):
 
         if self.verbose:
             print(f'Resetting {done.sum().item()} envs: {time() - t0}s')
-
+        self.done = self.done & (~done)
         return self._observe(self.observation_mode)
 
     def _create_envs(self, num_envs: int):
