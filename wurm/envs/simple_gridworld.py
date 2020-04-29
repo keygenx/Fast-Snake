@@ -183,7 +183,7 @@ class SimpleGridworld(object):
 
         if actions.shape[0] != self.num_envs:
             raise RuntimeError('Must have the same number of actions as environments.')
-
+        actions = actions.clone() #to prevent original varaible from changing due to inplace operations
         reward = torch.zeros((self.num_envs,)).float().to(self.device).requires_grad_(False)
         previous_done = self.done.clone() #
         info = dict()

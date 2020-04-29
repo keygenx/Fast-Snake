@@ -21,7 +21,7 @@ BODY_CHANNEL = 2
 
 SELF_COLLISION_REWARD = -1
 EDGE_COLLISION_REWARD = -1
-STEP_REWARD = 0.0
+STEP_REWARD = -0.001
 FOOD_REWARD = +0.5
 
 EPS = 1e-6
@@ -224,7 +224,7 @@ class SingleSnake(object):
 
         if actions.shape[0] != self.num_envs:
             raise RuntimeError('Must have the same number of actions as environments.')
-        
+        actions = actions.clone() #to prevent original varaible from changing due to inplace operations
         reward = torch.zeros((self.num_envs,)).float().to(self.device).requires_grad_(False)
         previous_done = self.done.clone() #to set all rewards to zero if state is already terminal
         
