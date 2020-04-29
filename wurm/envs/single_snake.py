@@ -21,8 +21,8 @@ BODY_CHANNEL = 2
 
 SELF_COLLISION_REWARD = -1
 EDGE_COLLISION_REWARD = -1
-STEP_REWARD = -0.001
-FOOD_REWARD = +0.5
+STEP_REWARD = -0.01
+FOOD_REWARD = +1.0
 
 EPS = 1e-6
 ################################CONSTANT#########################################

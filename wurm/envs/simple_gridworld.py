@@ -19,10 +19,10 @@ DEFAULT_DEVICE = 'cuda'
 FOOD_CHANNEL = 0
 HEAD_CHANNEL = 1
 
-EDGE_COLLISION_REWARD = -1
+EDGE_COLLISION_REWARD = -1.0
 
-STEP_REWARD = -0.1
-FOOD_REWARD = +0.5
+STEP_REWARD = -0.01
+FOOD_REWARD = +1.0
 
 EPS = 1e-6
 ################################CONSTANT#########################################
