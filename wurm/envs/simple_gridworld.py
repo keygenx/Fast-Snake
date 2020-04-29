@@ -185,7 +185,8 @@ class SimpleGridworld(object):
             raise RuntimeError('Must have the same number of actions as environments.')
         actions = actions.clone() #to prevent original varaible from changing due to inplace operations
         reward = torch.zeros((self.num_envs,)).float().to(self.device).requires_grad_(False)
-        previous_done = self.done.clone() #
+        if ~self.auto_reset:
+            previous_done = self.done.clone() #
         info = dict()
 
         t0 = time()
@@ -245,6 +246,7 @@ class SimpleGridworld(object):
         
         #Applying step reward
         reward.add_(STEP_REWARD)
+        
         if ~self.auto_reset:
             reward.mul_(~previous_done)
 
@@ -252,6 +254,7 @@ class SimpleGridworld(object):
 
         if self.done.any() and self.auto_reset:
             self.reset(self.done)
+
         return self._observe(self.observation_mode), reward, done, info
 
     def _select_from_available_locations(self, locs: torch.Tensor) -> torch.Tensor:
