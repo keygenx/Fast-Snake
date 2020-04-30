@@ -9,8 +9,6 @@ runs/
 # C extensions
 *.so
 
-#saved models and videos
-videos/
 
 # Distribution / packaging
 .Python
