@@ -1,4 +1,4 @@
-# Fast-Snake
+# Fast-Snake (RL Project)
 install pytorch
 <br/>
 Open DQN Implementation.ipynb
