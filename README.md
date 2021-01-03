@@ -1,4 +1,5 @@
 # Fast-Snake (RL Project)
+### A Reinforcement Learning Project for Classical Snakes Game
 install pytorch
 <br/>
 Open DQN Implementation.ipynb
