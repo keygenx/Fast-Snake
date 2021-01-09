@@ -3,6 +3,15 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+#CW2_DL
+CW2_DL/CNN_logdir
+CW2_DL/MLP_logdir
+CW2_DL/MTL_logdir
+CW2_DL/Task1_logdir
+CW2_DL/Task2_logdir
+CW2_DL/DAE_logdir
+
+
 # tensorboard visualizations
 runs/
 
